@@ -28,8 +28,8 @@ ICE_SERVER_OVERRIDE = [
       "turn:dev.jie8.cc:3478?transport=udp",
       "turn:dev.jie8.cc:3478?transport=tcp"
     ],
-    # "username": "TurnServerUsername",
-    # "credential": "TurnServerCredentials"
+    "username": "",
+    "credential": ""
   },
   {
     "urls": [
