@@ -135,5 +135,7 @@ The log is rotated daily and removed after 10 days. Archived logs are in `/colli
     mkdir /cert
     sudo cp cert.pem key.pem /cert
     
+    cd ~/
+    curl -O https://raw.githubusercontent.com/xyz71148/apprtc/master/src/collider/bin/collider
     
     nohup sudo ~/collider -port=443 -tls=true -room-server=https://dev.jie8.cc &
