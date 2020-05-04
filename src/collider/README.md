@@ -115,9 +115,6 @@ To enable rotation of the `/collider/collider.log` file add the following conten
 The log is rotated daily and removed after 10 days. Archived logs are in `/collider`.
 
 
-
-
-
     mkdir -p ~/data/projects/wwwroot
     echo "bar" > ~/data/projects/wwwroot/bar.txt
     cd ~/data/projects/wwwroot
