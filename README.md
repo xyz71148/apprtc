@@ -167,3 +167,16 @@ AppRTC by default uses an ICE server provider to get TURN servers. Previously we
 - https://stackoverflow.com/questions/43450615/how-to-generate-network-traversal-key
 - https://stackoverflow.com/questions/31161864/how-to-create-stun-turn-server-instance-using-aws-ec2
 - https://blog.golearns.org/2018/09/17/webrtc%E6%9C%8D%E5%8A%A1%E7%AB%AF%E6%90%AD%E5%BB%BA/
+- https://github.com/instrumentisto/coturn-docker-image
+    
+    docker run --network=host instrumentisto/coturn \
+           -n --log-file=stdout \
+           -p 3478:3478 -p 49160-49200:49160-49200/udp \
+           --min-port=49160 --max-port=49200 \
+           --lt-cred-mech --fingerprint \
+           --no-multicast-peers --no-cli \
+           --no-tlsv1 --no-tlsv1_1 \
+           --realm=realm.org \
+           --external-ip='$(detect-external-ip)' \
+           --relay-ip='$(detect-external-ip)'
+    
