@@ -113,3 +113,30 @@ To enable rotation of the `/collider/collider.log` file add the following conten
 ```
 
 The log is rotated daily and removed after 10 days. Archived logs are in `/collider`.
+
+
+
+
+
+    mkdir -p ~/data/projects/wwwroot
+    echo "bar" > ~/data/projects/wwwroot/bar.txt
+    cd ~/data/projects/wwwroot
+    python -m SimpleHTTPServer 80
+    
+    curl https://get.acme.sh | sh
+    
+    domain=dev.jie8.cc
+    
+    .acme.sh/acme.sh --issue \
+        -d $domain \
+        -w ~/data/projects/wwwroot
+    
+    cd ~/.acme.sh/$domain/
+    
+    cat $domain.key $domain.cer ca.cer > key.pem
+    cp fullchain.cer cert.pem
+    mkdir /cert
+    sudo cp cert.pem key.pem /cert
+    
+    
+    nohup sudo ~/collider -port=443 -tls=true -room-server=https://dev.jie8.cc &

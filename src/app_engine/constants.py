@@ -8,10 +8,10 @@ import os
 
 # Deprecated domains which we should to redirect to REDIRECT_URL.
 REDIRECT_DOMAINS =  [
-  'apprtc.appspot.com', 'apprtc.webrtc.org', 'www.appr.tc'
+    'active-tangent-271800.appspot.com'
 ]
 # URL which we should redirect to if matching in REDIRECT_DOMAINS.
-REDIRECT_URL = 'https://appr.tc'
+REDIRECT_URL = 'http://active-tangent-271800.appspot.com'
 
 ROOM_MEMCACHE_EXPIRATION_SEC = 60 * 60 * 24
 MEMCACHE_RETRY_LIMIT = 100
@@ -47,7 +47,7 @@ WSS_INSTANCE_HOST_KEY = 'host_port_pair'
 WSS_INSTANCE_NAME_KEY = 'vm_name'
 WSS_INSTANCE_ZONE_KEY = 'zone'
 WSS_INSTANCES = [{
-    WSS_INSTANCE_HOST_KEY: '35.221.177.2:8280',
+    WSS_INSTANCE_HOST_KEY: 'dev.jie8.cc:443',
     WSS_INSTANCE_NAME_KEY: 'p-asia-east1-b-shadowsocks-224',
     WSS_INSTANCE_ZONE_KEY: 'asia-east1-b'
 }]
