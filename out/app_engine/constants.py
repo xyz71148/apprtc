@@ -8,10 +8,10 @@ import os
 
 # Deprecated domains which we should to redirect to REDIRECT_URL.
 REDIRECT_DOMAINS =  [
-    'active-tangent-271800.appspot.com'
+  'apprtc.appspot.com', 'apprtc.webrtc.org', 'www.appr.tc'
 ]
 # URL which we should redirect to if matching in REDIRECT_DOMAINS.
-REDIRECT_URL = 'http://active-tangent-271800.appspot.com'
+REDIRECT_URL = 'https://appr.tc'
 
 ROOM_MEMCACHE_EXPIRATION_SEC = 60 * 60 * 24
 MEMCACHE_RETRY_LIMIT = 100
