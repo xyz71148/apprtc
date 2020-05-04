@@ -124,7 +124,8 @@ def append_url_arguments(request, link):
 
 def get_wss_parameters(request):
   wss_host_port_pair = request.get('wshpp')
-  wss_tls = request.get('wstls')
+  #wss_tls = request.get('wstls')
+  wss_tls = 'false'
 
   if not wss_host_port_pair:
     # Attempt to get a wss server from the status provided by prober,
