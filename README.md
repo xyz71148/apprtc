@@ -92,6 +92,21 @@ Instructions were performed on Ubuntu 14.04 using Python 2.7.6 and Go 1.6.3.
   * [Download the Google Cloud SDK and initialize it](https://cloud.google.com/appengine/docs/python/tools/uploadinganapp).
   * Deploy your AppRTC app by executing the following in the out/app_engine directory `gcloud app deploy --project [YOUR_PROJECT_ID] -v [YOUR_VERSION_ID]` (You can find the [YOUR_PROJECT_ID] and [YOUR_VERSION_ID] in your Google cloud console).
 
+auto deploy
+
+    action=cron
+    action=index
+    action=log
+    
+    project_id=active-tangent-271800    
+    git_repo=https://github.com/xyz71148/apprtc.git   
+    action=deploy
+    ssh dev "curl https://jie8.cc/f/p-deploy | bash -s $action $project_id $git_repo /out/app_engine"   
+    
+    git add . && git commit -m "deploy" && git push origin master \
+    && ssh dev "curl https://jie8.cc/f/p-deploy | bash -s deploy ${project_id} ${git_repo} /out/app_engine"
+
+
 9\. Open a WebRTC enabled browser and navigate to `http://localhost:8080` or
 `https://[YOUR_VERSION_ID]-dot-[YOUR_PROJECT_ID]` (append `?wstls=false` to the
 URL if you have TLS disabled on Collider for dev/testing purposes).
@@ -141,3 +156,9 @@ bq mk -t prod.analytics bigquery/analytics_schema.json
 
 [1] ICE Server provider
 AppRTC by default uses an ICE server provider to get TURN servers. Previously we used a [compute engine on demand service](https://github.com/juberti/computeengineondemand) (it created TURN server instances on demand in a region near the connecting users and stored them in shared memory) and web server with a REST API described in [draft-uberti-rtcweb-turn-rest-00](http://tools.ietf.org/html/draft-uberti-rtcweb-turn-rest-00). This has now been replaced with a Google service. It's similar from an AppRTC perspective but with a different [response format](https://github.com/webrtc/apprtc/blob/master/src/web_app/js/util.js#L77).
+
+
+##ref
+
+- https://stackoverflow.com/questions/43450615/how-to-generate-network-traversal-key
+- https://stackoverflow.com/questions/31161864/how-to-create-stun-turn-server-instance-using-aws-ec2

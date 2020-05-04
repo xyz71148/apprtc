@@ -52,4 +52,4 @@ env_variables:
   # Only change these while developing, do not commit to source!
   # Use appcfg.py --env_variable=ICE_SERVER_API_KEY:KEY \
   # in order to replace variables when deploying.
-  ICE_SERVER_API_KEY: none
+  ICE_SERVER_API_KEY: AIzaSyDWOpfFh9UuLhUCdMVjn0eYGYDPTCuNYms
