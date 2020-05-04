@@ -1,2 +1,7 @@
 requests
 webtest
+jinja2
+webapp2
+setuptools==40.3.0
+Python-gflagsgunicorn
+requests

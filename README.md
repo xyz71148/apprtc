@@ -180,3 +180,5 @@ AppRTC by default uses an ICE server provider to get TURN servers. Previously we
            --external-ip='$(detect-external-ip)' \
            --relay-ip='$(detect-external-ip)'
     
+    
+    ./venv/bin/gunicorn --chdir ./src/app_engine apprtc:app -w 1 --threads 1 -b 0.0.0.0:8080
