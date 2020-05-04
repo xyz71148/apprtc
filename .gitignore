@@ -1,5 +1,6 @@
 *.pyc
 .DS_Store
+venv
 /src/web_app/js/enums.js
 bower_components
 browser*
