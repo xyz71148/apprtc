@@ -1,64 +1,25 @@
 #!/usr/bin/python2.4
 #
 # Copyright 2011 Google Inc. All Rights Reserved.
-from paste import httpserver
-import os
-import logging
-import jinja2
-import webapp2
-import constants
-import random
+
+"""WebRTC Demo
+
+This module demonstrates the WebRTC API by implementing a simple video chat app.
+"""
+
 import cgi
 import json
-import requests
-import webapp2_static
-from fcache.cache import FileCache
+import logging
+import os
+import random
 
-cache = FileCache('appname')
+import jinja2
+import webapp2
+
+import constants
+
 jinja_environment = jinja2.Environment(
     loader=jinja2.FileSystemLoader(os.path.dirname(__file__)))
-
-
-class StaticFileHandler(webapp2.RequestHandler):
-    u"""Static file handler"""
-
-    def __init__(self):
-        # I guess I need to override something here to load
-        # `paste.StaticURLParser()` properly.
-        pass
-
-
-def get_version_info():
-    try:
-        path = os.path.join(os.path.dirname(__file__), 'version_info.json')
-        f = open(path)
-        if f is not None:
-            try:
-                return json.load(f)
-            except ValueError as e:
-                logging.warning('version_info.json cannot be decoded: ' + str(e))
-    except IOError as e:
-        logging.info('version_info.json cannot be opened: ' + str(e))
-    return None
-
-
-def get_wss_parameters(request, wss_host_port_pair):
-    wss_tls = request.get('wstls')
-    # wss_host_port_pair = constants.WSS_INSTANCE_HOST_KEY
-    if wss_tls and wss_tls == 'false':
-        wss_url = 'ws://' + wss_host_port_pair + '/ws'
-        wss_post_url = 'http://' + wss_host_port_pair
-    else:
-        wss_url = 'wss://' + wss_host_port_pair + '/ws'
-        wss_post_url = 'https://' + wss_host_port_pair
-    return (wss_url, wss_post_url)
-
-
-# HD is on by default for desktop Chrome, but not Android or Firefox (yet)
-def get_hd_default(user_agent):
-    if 'Android' in user_agent or not 'Chrome' in user_agent:
-        return 'false'
-    return 'true'
 
 
 def generate_random(length):
@@ -68,13 +29,25 @@ def generate_random(length):
     return word
 
 
-def maybe_add_constraint(constraints, param, constraint):
-    if (param.lower() == 'true'):
-        constraints['optional'].append({constraint: True})
-    elif (param.lower() == 'false'):
-        constraints['optional'].append({constraint: False})
+# HD is on by default for desktop Chrome, but not Android or Firefox (yet)
+def get_hd_default(user_agent):
+    if 'Android' in user_agent or not 'Chrome' in user_agent:
+        return 'false'
+    return 'true'
 
-    return constraints
+
+# iceServers will be filled in by the TURN HTTP request.
+def make_pc_config(ice_transports, ice_server_override):
+    config = {
+        'iceServers': [],
+        'bundlePolicy': 'max-bundle',
+        'rtcpMuxPolicy': 'require'
+    };
+    if ice_server_override:
+        config['iceServers'] = ice_server_override
+    if ice_transports:
+        config['iceTransports'] = ice_transports
+    return config
 
 
 def add_media_track_constraint(track_constraints, constraint_string):
@@ -111,6 +84,25 @@ def make_media_track_constraints(constraints_string):
     return track_constraints
 
 
+def make_media_stream_constraints(audio, video, firefox_fake_device):
+    stream_constraints = (
+        {'audio': make_media_track_constraints(audio),
+         'video': make_media_track_constraints(video)})
+    if firefox_fake_device:
+        stream_constraints['fake'] = True
+    logging.info('Applying media constraints: ' + str(stream_constraints))
+    return stream_constraints
+
+
+def maybe_add_constraint(constraints, param, constraint):
+    if (param.lower() == 'true'):
+        constraints['optional'].append({constraint: True})
+    elif (param.lower() == 'false'):
+        constraints['optional'].append({constraint: False})
+
+    return constraints
+
+
 def make_pc_constraints(dtls, dscp, ipv6):
     constraints = {'optional': []};
     maybe_add_constraint(constraints, dtls, 'DtlsSrtpKeyAgreement')
@@ -118,20 +110,6 @@ def make_pc_constraints(dtls, dscp, ipv6):
     maybe_add_constraint(constraints, ipv6, 'googIPv6')
 
     return constraints
-
-
-# iceServers will be filled in by the TURN HTTP request.
-def make_pc_config(ice_transports, ice_server_override):
-    config = {
-        'iceServers': [],
-        'bundlePolicy': 'max-bundle',
-        'rtcpMuxPolicy': 'require'
-    };
-    if ice_server_override:
-        config['iceServers'] = ice_server_override
-    if ice_transports:
-        config['iceTransports'] = ice_transports
-    return config
 
 
 def append_url_arguments(request, link):
@@ -146,14 +124,43 @@ def append_url_arguments(request, link):
     return link
 
 
-def make_media_stream_constraints(audio, video, firefox_fake_device):
-    stream_constraints = (
-        {'audio': make_media_track_constraints(audio),
-         'video': make_media_track_constraints(video)})
-    if firefox_fake_device:
-        stream_constraints['fake'] = True
-    logging.info('Applying media constraints: ' + str(stream_constraints))
-    return stream_constraints
+def get_wss_parameters(request):
+    wss_host_port_pair = request.get('wshpp')
+    wss_tls = request.get('wstls')
+    if not wss_host_port_pair:
+        # Attempt to get a wss server from the status provided by prober,
+        # if that fails, use fallback value.
+        memcache_client = memcache.Client()
+        wss_active_host = memcache_client.get(constants.WSS_HOST_ACTIVE_HOST_KEY)
+        if wss_active_host in constants.WSS_HOST_PORT_PAIRS:
+            wss_host_port_pair = wss_active_host
+        else:
+            logging.warning(
+                'Invalid or no value returned from memcache, using fallback: '
+                + json.dumps(wss_active_host))
+            wss_host_port_pair = constants.WSS_HOST_PORT_PAIRS[0]
+
+    if wss_tls and wss_tls == 'false':
+        wss_url = 'ws://' + wss_host_port_pair + '/ws'
+        wss_post_url = 'http://' + wss_host_port_pair
+    else:
+        wss_url = 'wss://' + wss_host_port_pair + '/ws'
+        wss_post_url = 'https://' + wss_host_port_pair
+    return (wss_url, wss_post_url)
+
+
+def get_version_info():
+    try:
+        path = os.path.join(os.path.dirname(__file__), 'version_info.json')
+        f = open(path)
+        if f is not None:
+            try:
+                return json.load(f)
+            except ValueError as e:
+                logging.warning('version_info.json cannot be decoded: ' + str(e))
+    except IOError as e:
+        logging.info('version_info.json cannot be opened: ' + str(e))
+    return None
 
 
 # Returns appropriate room parameters based on query parameters in the request.
@@ -257,24 +264,17 @@ def get_room_parameters(request, room_id, client_id, is_initiator):
                          (ice_server_base_url, constants.ICE_SERVER_API_KEY)
     else:
         ice_server_url = ''
-    ice_server_url = ""
+
     # If defined it will override the ICE server provider and use the specified
     # turn servers directly.
     ice_server_override = constants.ICE_SERVER_OVERRIDE
 
-    res = requests.get("https://jie8.cc/api/utils/turnserver/auth")
-    res_body = res.json()['body']
-    wss_instance_host = res_body['wss_instance_host']
-    ice_server_override = res_body['ice_server']
-
     pc_config = make_pc_config(ice_transports, ice_server_override)
     pc_constraints = make_pc_constraints(dtls, dscp, ipv6)
-    offer_options = {}
+    offer_options = {};
     media_constraints = make_media_stream_constraints(audio, video,
                                                       firefox_fake_device)
-
-    cache['wss_instance_host'] = wss_instance_host
-    wss_url, wss_post_url = get_wss_parameters(request, wss_instance_host)
+    wss_url, wss_post_url = get_wss_parameters(request)
 
     bypass_join_confirmation = 'BYPASS_JOIN_CONFIRMATION' in os.environ and \
                                os.environ['BYPASS_JOIN_CONFIRMATION'] == 'True'
@@ -306,21 +306,6 @@ def get_room_parameters(request, room_id, client_id, is_initiator):
     if is_initiator is not None:
         params['is_initiator'] = json.dumps(is_initiator)
     return params
-
-
-class MainPage(webapp2.RequestHandler):
-    def write_response(self, target_page, params={}):
-        template = jinja_environment.get_template(target_page)
-        content = template.render(params)
-        self.response.out.write(content)
-
-    def get(self):
-        params = get_room_parameters(self.request, None, None, None)
-        self.write_response('index_template.html', params)
-
-
-def get_memcache_key_for_room(host, room_id):
-    return '%s/%s' % (host, room_id)
 
 
 # For now we have (room_id, client_id) pairs are 'unique' but client_ids are
@@ -375,8 +360,13 @@ class Room:
         return str(self.clients.keys())
 
 
+def get_memcache_key_for_room(host, room_id):
+    return '%s/%s' % (host, room_id)
+
+
 def add_client_to_room(request, room_id, client_id, is_loopback):
     key = get_memcache_key_for_room(request.host_url, room_id)
+    memcache_client = memcache.Client()
     error = None
     retries = 0
     room = None
@@ -385,10 +375,14 @@ def add_client_to_room(request, room_id, client_id, is_loopback):
         is_initiator = None
         messages = []
         room_state = ''
-        room = cache.get(key)
+        room = memcache_client.gets(key)
         if room is None:
-            cache[key] = Room()
-            room = cache.get(key)
+            # 'set' and another 'gets' are needed for CAS to work.
+            if not memcache_client.set(key, Room()):
+                logging.warning('memcache.Client.set failed for key ' + key)
+                error = constants.RESPONSE_ERROR
+                break
+            room = memcache_client.gets(key)
 
         occupancy = room.get_occupancy()
         if occupancy >= 2:
@@ -410,8 +404,7 @@ def add_client_to_room(request, room_id, client_id, is_loopback):
             room.add_client(client_id, Client(is_initiator))
             other_client.clear_messages()
 
-        # if memcache_client.cas(key, room, constants.ROOM_MEMCACHE_EXPIRATION_SEC):
-        if 1:
+        if memcache_client.cas(key, room, constants.ROOM_MEMCACHE_EXPIRATION_SEC):
             logging.info('Added client %s in room %s, retries = %d' \
                          % (client_id, room_id, retries))
 
@@ -423,9 +416,117 @@ def add_client_to_room(request, room_id, client_id, is_loopback):
             success = True
             break
         else:
-            retries += 1
+            retries = retries + 1
     return {'error': error, 'is_initiator': is_initiator,
             'messages': messages, 'room_state': str(room)}
+
+
+def remove_client_from_room(host, room_id, client_id):
+    key = get_memcache_key_for_room(host, room_id)
+    memcache_client = memcache.Client()
+    retries = 0
+    # Compare and set retry loop.
+    while True:
+        room = memcache_client.gets(key)
+        if room is None:
+            logging.warning('remove_client_from_room: Unknown room ' + room_id)
+            return {'error': constants.RESPONSE_UNKNOWN_ROOM, 'room_state': None}
+        if not room.has_client(client_id):
+            logging.warning('remove_client_from_room: Unknown client ' + client_id + \
+                            ' for room ' + room_id)
+            return {'error': constants.RESPONSE_UNKNOWN_CLIENT, 'room_state': None}
+
+        room.remove_client(client_id)
+        if room.has_client(constants.LOOPBACK_CLIENT_ID):
+            room.remove_client(constants.LOOPBACK_CLIENT_ID)
+        if room.get_occupancy() > 0:
+            room.get_other_client(client_id).set_initiator(True)
+        else:
+            room = None
+
+        if memcache_client.cas(key, room, constants.ROOM_MEMCACHE_EXPIRATION_SEC):
+            logging.info('Removed client %s from room %s, retries=%d' \
+                         % (client_id, room_id, retries))
+            return {'error': None, 'room_state': str(room)}
+        retries = retries + 1
+
+
+def save_message_from_client(host, room_id, client_id, message):
+    text = None
+    try:
+        text = message.encode(encoding='utf-8', errors='strict')
+    except Exception as e:
+        return {'error': constants.RESPONSE_ERROR, 'saved': False}
+
+    key = get_memcache_key_for_room(host, room_id)
+    memcache_client = memcache.Client()
+    retries = 0
+    # Compare and set retry loop.
+    while True:
+        room = memcache_client.gets(key)
+        if room is None:
+            logging.warning('Unknown room: ' + room_id)
+            return {'error': constants.RESPONSE_UNKNOWN_ROOM, 'saved': False}
+        if not room.has_client(client_id):
+            logging.warning('Unknown client: ' + client_id)
+            return {'error': constants.RESPONSE_UNKNOWN_CLIENT, 'saved': False}
+        if room.get_occupancy() > 1:
+            return {'error': None, 'saved': False}
+
+        client = room.get_client(client_id)
+        client.add_message(text)
+        if memcache_client.cas(key, room, constants.ROOM_MEMCACHE_EXPIRATION_SEC):
+            logging.info('Saved message for client %s:%s in room %s, retries=%d' \
+                         % (client_id, str(client), room_id, retries))
+            return {'error': None, 'saved': True}
+        retries = retries + 1
+
+
+class LeavePage(webapp2.RequestHandler):
+    def post(self, room_id, client_id):
+        result = remove_client_from_room(
+            self.request.host_url, room_id, client_id)
+        if result['error'] is None:
+            logging.info('Room ' + room_id + ' has state ' + result['room_state'])
+
+
+class MessagePage(webapp2.RequestHandler):
+    def write_response(self, result):
+        content = json.dumps({'result': result})
+        self.response.write(content)
+
+    def send_message_to_collider(self, room_id, client_id, message):
+        logging.info('Forwarding message to collider for room ' + room_id +
+                     ' client ' + client_id)
+        wss_url, wss_post_url = get_wss_parameters(self.request)
+        url = wss_post_url + '/' + room_id + '/' + client_id
+        result = urlfetch.fetch(url=url,
+                                payload=message,
+                                method=urlfetch.POST)
+        if result.status_code != 200:
+            logging.error(
+                'Failed to send message to collider: %d' % (result.status_code))
+            # TODO(tkchin): better error handling.
+            self.error(500)
+            return
+        self.write_response(constants.RESPONSE_SUCCESS)
+
+    def post(self, room_id, client_id):
+        message_json = self.request.body
+        result = save_message_from_client(
+            self.request.host_url, room_id, client_id, message_json)
+        if result['error'] is not None:
+            self.write_response(result['error'])
+            return
+        if not result['saved']:
+            # Other client joined, forward to collider. Do this outside the lock.
+            # Note: this may fail in local dev server due to not having the right
+            # certificate file locally for SSL validation.
+            # Note: loopback scenario follows this code path.
+            # TODO(tkchin): consider async fetch here.
+            self.send_message_to_collider(room_id, client_id, message_json)
+        else:
+            self.write_response(constants.RESPONSE_SUCCESS)
 
 
 class JoinPage(webapp2.RequestHandler):
@@ -458,42 +559,52 @@ class JoinPage(webapp2.RequestHandler):
         logging.info('Room ' + room_id + ' has state ' + result['room_state'])
 
 
-def remove_client_from_room(host, room_id, client_id):
-    key = get_memcache_key_for_room(host, room_id)
-    retries = 0
-    # Compare and set retry loop.
-    while True:
-        room = cache[key]
-        if room is None:
-            logging.warning('remove_client_from_room: Unknown room ' + room_id)
-            return {'error': constants.RESPONSE_UNKNOWN_ROOM, 'room_state': None}
-        if not room.has_client(client_id):
-            logging.warning('remove_client_from_room: Unknown client ' + client_id + \
-                            ' for room ' + room_id)
-            return {'error': constants.RESPONSE_UNKNOWN_CLIENT, 'room_state': None}
+class MainPage(webapp2.RequestHandler):
+    def write_response(self, target_page, params={}):
+        template = jinja_environment.get_template(target_page)
+        content = template.render(params)
+        self.response.out.write(content)
 
-        room.remove_client(client_id)
-        if room.has_client(constants.LOOPBACK_CLIENT_ID):
-            room.remove_client(constants.LOOPBACK_CLIENT_ID)
-        if room.get_occupancy() > 0:
-            room.get_other_client(client_id).set_initiator(True)
-        else:
-            room = None
-
-        # if memcache_client.cas(key, room, constants.ROOM_MEMCACHE_EXPIRATION_SEC):
-        #     logging.info('Removed client %s from room %s, retries=%d' \
-        #                  % (client_id, room_id, retries))
-        #     return {'error': None, 'room_state': str(room)}
-        retries = retries + 1
-        return {'error': None, 'room_state': str(room)}
+    def get(self):
+        """Renders index.html."""
+        checkIfRedirect(self);
+        # Parse out parameters from request.
+        params = get_room_parameters(self.request, None, None, None)
+        # room_id/room_link will not be included in the returned parameters
+        # so the client will show the landing page for room selection.
+        self.write_response('index_template.html', params)
 
 
-class LeavePage(webapp2.RequestHandler):
-    def post(self, room_id, client_id):
-        result = remove_client_from_room(
-            self.request.host_url, room_id, client_id)
-        if result['error'] is None:
-            logging.info('Room ' + room_id + ' has state ' + result['room_state'])
+class RoomPage(webapp2.RequestHandler):
+    def write_response(self, target_page, params={}):
+        template = jinja_environment.get_template(target_page)
+        content = template.render(params)
+        self.response.out.write(content)
+
+    def get(self, room_id):
+        """Renders index.html or full.html."""
+        checkIfRedirect(self)
+        # Check if room is full.
+        room = memcache.get(
+            get_memcache_key_for_room(self.request.host_url, room_id))
+        if room is not None:
+            logging.info('Room ' + room_id + ' has state ' + str(room))
+            if room.get_occupancy() >= 2:
+                logging.info('Room ' + room_id + ' is full')
+                self.write_response('full_template.html')
+                return
+        # Parse out room parameters from request.
+        params = get_room_parameters(self.request, room_id, None, None)
+        # room_id/room_link will be included in the returned parameters
+        # so the client will launch the requested room.
+        self.write_response('index_template.html', params)
+
+
+class ParamsPage(webapp2.RequestHandler):
+    def get(self):
+        # Return room independent room parameters.
+        params = get_room_parameters(self.request, None, None, None)
+        self.response.write(json.dumps(params))
 
 
 def checkIfRedirect(self):
@@ -510,125 +621,13 @@ def checkIfRedirect(self):
         webapp2.redirect(redirect_url, permanent=True, abort=True)
 
 
-class RoomPage(webapp2.RequestHandler):
-    def write_response(self, target_page, params={}):
-        template = jinja_environment.get_template(target_page)
-        content = template.render(params)
-        self.response.out.write(content)
-
-    def get(self, room_id):
-        """Renders index.html or full.html."""
-        checkIfRedirect(self)
-        # Check if room is full.
-        room = cache.get(
-            get_memcache_key_for_room(self.request.host_url, room_id))
-        if room is not None:
-            logging.info('Room ' + room_id + ' has state ' + str(room))
-            if room.get_occupancy() >= 2:
-                logging.info('Room ' + room_id + ' is full')
-                self.write_response('full_template.html')
-                return
-        # Parse out room parameters from request.
-        params = get_room_parameters(self.request, room_id, None, None)
-        # room_id/room_link will be included in the returned parameters
-        # so the client will launch the requested room.
-        self.write_response('index_template.html', params)
-
-
-def save_message_from_client(host, room_id, client_id, message):
-    text = None
-    try:
-        text = message.encode(encoding='utf-8', errors='strict')
-    except Exception as e:
-        return {'error': constants.RESPONSE_ERROR, 'saved': False}
-
-    key = get_memcache_key_for_room(host, room_id)
-    retries = 0
-    # Compare and set retry loop.
-    while True:
-        room = cache.get(key)
-        if room is None:
-            logging.warning('Unknown room: ' + room_id)
-            return {'error': constants.RESPONSE_UNKNOWN_ROOM, 'saved': False}
-        if not room.has_client(client_id):
-            logging.warning('Unknown client: ' + client_id)
-            return {'error': constants.RESPONSE_UNKNOWN_CLIENT, 'saved': False}
-        if room.get_occupancy() > 1:
-            return {'error': None, 'saved': False}
-
-        client = room.get_client(client_id)
-        client.add_message(text)
-        # if memcache_client.cas(key, room, constants.ROOM_MEMCACHE_EXPIRATION_SEC):
-        #     logging.info('Saved message for client %s:%s in room %s, retries=%d' \
-        #                  % (client_id, str(client), room_id, retries))
-        #     return {'error': None, 'saved': True}
-        retries = retries + 1
-        return {'error': None, 'saved': True}
-
-
-class MessagePage(webapp2.RequestHandler):
-    def write_response(self, result):
-        content = json.dumps({'result': result})
-        self.response.write(content)
-
-    def send_message_to_collider(self, room_id, client_id, message):
-        logging.info('Forwarding message to collider for room ' + room_id +
-                     ' client ' + client_id)
-        wss_instance_host = cache.get("wss_instance_host")
-        wss_url, wss_post_url = get_wss_parameters(self.request, wss_instance_host)
-        url = wss_post_url + '/' + room_id + '/' + client_id
-        result = requests.post(url=url, payload=message)
-
-        if result.status_code != 200:
-            logging.error(
-                'Failed to send message to collider: %d' % (result.status_code))
-            # TODO(tkchin): better error handling.
-            self.error(500)
-            return
-        self.write_response(constants.RESPONSE_SUCCESS)
-
-    def post(self, room_id, client_id):
-        message_json = self.request.body
-        result = save_message_from_client(
-            self.request.host_url, room_id, client_id, message_json)
-        if result['error'] is not None:
-            self.write_response(result['error'])
-            return
-        if not result['saved']:
-            # Other client joined, forward to collider. Do this outside the lock.
-            # Note: this may fail in local dev server due to not having the right
-            # certificate file locally for SSL validation.
-            # Note: loopback scenario follows this code path.
-            # TODO(tkchin): consider async fetch here.
-            self.send_message_to_collider(room_id, client_id, message_json)
-        else:
-            self.write_response(constants.RESPONSE_SUCCESS)
-
-
-class ParamsPage(webapp2.RequestHandler):
-    def get(self):
-        # Return room independent room parameters.
-        params = get_room_parameters(self.request, None, None, None)
-        self.response.write(json.dumps(params))
-
-
 app = webapp2.WSGIApplication([
     ('/', MainPage),
+    # ('/a/', analytics_page.AnalyticsPage),
+    # ('/compute/(\w+)/(\S+)/(\S+)', compute_page.ComputePage),
     ('/join/([a-zA-Z0-9-_]+)', JoinPage),
     ('/leave/([a-zA-Z0-9-_]+)/([a-zA-Z0-9-_]+)', LeavePage),
-    ('/r/([a-zA-Z0-9-_]+)', RoomPage),
     ('/message/([a-zA-Z0-9-_]+)/([a-zA-Z0-9-_]+)', MessagePage),
     ('/params', ParamsPage),
-    (r'/static/(.+)', webapp2_static.StaticFileHandler)
-], debug=True, config={
-    'webapp2_static.static_file_path': os.path.join(os.path.abspath(os.path.dirname(__file__)), "static")
-})
-
-
-def main():
-    port = int(os.environ.get('PORT', 5000))
-    httpserver.serve(app, host='0.0.0.0', port=port)
-
-
-if __name__ == '__main__':
-    main()
+    ('/r/([a-zA-Z0-9-_]+)', RoomPage),
+], debug=True)
