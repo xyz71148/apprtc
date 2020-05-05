@@ -1,7 +1,7 @@
 #!/usr/bin/python2.4
 #
 # Copyright 2011 Google Inc. All Rights Reserved.
-from paste import httpserver
+# from paste import httpserver
 import os
 import logging
 import jinja2
@@ -11,7 +11,7 @@ import random
 import cgi
 import json
 import requests
-import webapp2_static
+# import webapp2_static
 from fcache.cache import FileCache
 
 cache = FileCache('appname')
@@ -619,16 +619,16 @@ app = webapp2.WSGIApplication([
     ('/r/([a-zA-Z0-9-_]+)', RoomPage),
     ('/message/([a-zA-Z0-9-_]+)/([a-zA-Z0-9-_]+)', MessagePage),
     ('/params', ParamsPage),
-    (r'/static/(.+)', webapp2_static.StaticFileHandler)
+    # (r'/static/(.+)', webapp2_static.StaticFileHandler)
 ], debug=True, config={
     'webapp2_static.static_file_path': os.path.join(os.path.abspath(os.path.dirname(__file__)), "static")
 })
 
 
-def main():
-    port = int(os.environ.get('PORT', 5000))
-    httpserver.serve(app, host='0.0.0.0', port=port)
-
-
-if __name__ == '__main__':
-    main()
+# def main():
+#     port = int(os.environ.get('PORT', 5000))
+#     httpserver.serve(app, host='0.0.0.0', port=port)
+#
+#
+# if __name__ == '__main__':
+#     main()
