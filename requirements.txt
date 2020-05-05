@@ -7,3 +7,4 @@ Python-gflags
 gunicorn
 requests
 paste
+webapp2_static
