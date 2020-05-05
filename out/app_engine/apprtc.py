@@ -1,7 +1,7 @@
 #!/usr/bin/python2.4
 #
 # Copyright 2011 Google Inc. All Rights Reserved.
-from paste import httpserver
+# from paste import httpserver
 import os
 import logging
 import jinja2
@@ -625,10 +625,10 @@ app = webapp2.WSGIApplication([
 })
 
 
-def main():
-    port = int(os.environ.get('PORT', 5000))
-    httpserver.serve(app, host='0.0.0.0', port=port)
-
-
-if __name__ == '__main__':
-    main()
+# def main():
+#     port = int(os.environ.get('PORT', 5000))
+#     httpserver.serve(app, host='0.0.0.0', port=port)
+#
+#
+# if __name__ == '__main__':
+#     main()
