@@ -158,10 +158,6 @@ bq mk -t prod.analytics bigquery/analytics_schema.json
 AppRTC by default uses an ICE server provider to get TURN servers. Previously we used a [compute engine on demand service](https://github.com/juberti/computeengineondemand) (it created TURN server instances on demand in a region near the connecting users and stored them in shared memory) and web server with a REST API described in [draft-uberti-rtcweb-turn-rest-00](http://tools.ietf.org/html/draft-uberti-rtcweb-turn-rest-00). This has now been replaced with a Google service. It's similar from an AppRTC perspective but with a different [response format](https://github.com/webrtc/apprtc/blob/master/src/web_app/js/util.js#L77).
 
 
-
-    nohup ./collider -port=8280 -tls=false &
-
-
 ##ref
 
 - https://stackoverflow.com/questions/43450615/how-to-generate-network-traversal-key
@@ -169,16 +165,3 @@ AppRTC by default uses an ICE server provider to get TURN servers. Previously we
 - https://blog.golearns.org/2018/09/17/webrtc%E6%9C%8D%E5%8A%A1%E7%AB%AF%E6%90%AD%E5%BB%BA/
 - https://github.com/instrumentisto/coturn-docker-image
     
-    docker run --network=host instrumentisto/coturn \
-           -n --log-file=stdout \
-           -p 3478:3478 -p 49160-49200:49160-49200/udp \
-           --min-port=49160 --max-port=49200 \
-           --lt-cred-mech --fingerprint \
-           --no-multicast-peers --no-cli \
-           --no-tlsv1 --no-tlsv1_1 \
-           --realm=realm.org \
-           --external-ip='$(detect-external-ip)' \
-           --relay-ip='$(detect-external-ip)'
-    
-    
-    ./venv/bin/gunicorn --chdir ./src/app_engine apprtc:app -w 1 --threads 1 -b 0.0.0.0:8080
