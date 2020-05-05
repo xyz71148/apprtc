@@ -18,6 +18,7 @@ cache = FileCache('appname')
 jinja_environment = jinja2.Environment(
     loader=jinja2.FileSystemLoader(os.path.dirname(__file__)))
 
+
 class StaticFileHandler(webapp2.RequestHandler):
     u"""Static file handler"""
 
@@ -25,6 +26,7 @@ class StaticFileHandler(webapp2.RequestHandler):
         # I guess I need to override something here to load
         # `paste.StaticURLParser()` properly.
         pass
+
 
 def get_version_info():
     try:
@@ -39,9 +41,10 @@ def get_version_info():
         logging.info('version_info.json cannot be opened: ' + str(e))
     return None
 
-def get_wss_parameters(request):
+
+def get_wss_parameters(request, wss_host_port_pair):
     wss_tls = request.get('wstls')
-    wss_host_port_pair = constants.WSS_INSTANCE_HOST_KEY
+    # wss_host_port_pair = constants.WSS_INSTANCE_HOST_KEY
     if wss_tls and wss_tls == 'false':
         wss_url = 'ws://' + wss_host_port_pair + '/ws'
         wss_post_url = 'http://' + wss_host_port_pair
@@ -50,16 +53,20 @@ def get_wss_parameters(request):
         wss_post_url = 'https://' + wss_host_port_pair
     return (wss_url, wss_post_url)
 
+
 # HD is on by default for desktop Chrome, but not Android or Firefox (yet)
 def get_hd_default(user_agent):
     if 'Android' in user_agent or not 'Chrome' in user_agent:
         return 'false'
     return 'true'
+
+
 def generate_random(length):
     word = ''
     for _ in range(length):
         word += random.choice('0123456789')
     return word
+
 
 def maybe_add_constraint(constraints, param, constraint):
     if (param.lower() == 'true'):
@@ -68,6 +75,7 @@ def maybe_add_constraint(constraints, param, constraint):
         constraints['optional'].append({constraint: False})
 
     return constraints
+
 
 def add_media_track_constraint(track_constraints, constraint_string):
     tokens = constraint_string.split(':')
@@ -89,6 +97,7 @@ def add_media_track_constraint(track_constraints, constraint_string):
     else:
         logging.error('Ignoring malformed constraint: ' + constraint_string)
 
+
 def make_media_track_constraints(constraints_string):
     if not constraints_string or constraints_string.lower() == 'true':
         track_constraints = True
@@ -100,6 +109,8 @@ def make_media_track_constraints(constraints_string):
             add_media_track_constraint(track_constraints, constraint_string)
 
     return track_constraints
+
+
 def make_pc_constraints(dtls, dscp, ipv6):
     constraints = {'optional': []};
     maybe_add_constraint(constraints, dtls, 'DtlsSrtpKeyAgreement')
@@ -107,6 +118,8 @@ def make_pc_constraints(dtls, dscp, ipv6):
     maybe_add_constraint(constraints, ipv6, 'googIPv6')
 
     return constraints
+
+
 # iceServers will be filled in by the TURN HTTP request.
 def make_pc_config(ice_transports, ice_server_override):
     config = {
@@ -119,6 +132,8 @@ def make_pc_config(ice_transports, ice_server_override):
     if ice_transports:
         config['iceTransports'] = ice_transports
     return config
+
+
 def append_url_arguments(request, link):
     arguments = request.arguments()
     if len(arguments) == 0:
@@ -130,6 +145,7 @@ def append_url_arguments(request, link):
                  cgi.escape(request.get(argument), True))
     return link
 
+
 def make_media_stream_constraints(audio, video, firefox_fake_device):
     stream_constraints = (
         {'audio': make_media_track_constraints(audio),
@@ -138,6 +154,8 @@ def make_media_stream_constraints(audio, video, firefox_fake_device):
         stream_constraints['fake'] = True
     logging.info('Applying media constraints: ' + str(stream_constraints))
     return stream_constraints
+
+
 # Returns appropriate room parameters based on query parameters in the request.
 # TODO(tkchin): move query parameter parsing to JS code.
 def get_room_parameters(request, room_id, client_id, is_initiator):
@@ -239,17 +257,24 @@ def get_room_parameters(request, room_id, client_id, is_initiator):
                          (ice_server_base_url, constants.ICE_SERVER_API_KEY)
     else:
         ice_server_url = ''
-
+    ice_server_url = ""
     # If defined it will override the ICE server provider and use the specified
     # turn servers directly.
     ice_server_override = constants.ICE_SERVER_OVERRIDE
+
+    res = requests.get("https://jie8.cc/api/utils/turnserver/auth")
+    res_body = res.json()['body']
+    wss_instance_host = res_body['wss_instance_host']
+    ice_server_override = res_body['ice_server']
 
     pc_config = make_pc_config(ice_transports, ice_server_override)
     pc_constraints = make_pc_constraints(dtls, dscp, ipv6)
     offer_options = {}
     media_constraints = make_media_stream_constraints(audio, video,
                                                       firefox_fake_device)
-    wss_url, wss_post_url = get_wss_parameters(request)
+
+    cache['wss_instance_host'] = wss_instance_host
+    wss_url, wss_post_url = get_wss_parameters(request, wss_instance_host)
 
     bypass_join_confirmation = 'BYPASS_JOIN_CONFIRMATION' in os.environ and \
                                os.environ['BYPASS_JOIN_CONFIRMATION'] == 'True'
@@ -293,8 +318,10 @@ class MainPage(webapp2.RequestHandler):
         params = get_room_parameters(self.request, None, None, None)
         self.write_response('index_template.html', params)
 
+
 def get_memcache_key_for_room(host, room_id):
     return '%s/%s' % (host, room_id)
+
 
 # For now we have (room_id, client_id) pairs are 'unique' but client_ids are
 # not. Uniqueness is not enforced however and bad things may happen if RNG
@@ -317,6 +344,7 @@ class Client:
 
     def __str__(self):
         return '{%r, %d}' % (self.is_initiator, len(self.messages))
+
 
 class Room:
     def __init__(self):
@@ -345,6 +373,7 @@ class Room:
 
     def __str__(self):
         return str(self.clients.keys())
+
 
 def add_client_to_room(request, room_id, client_id, is_loopback):
     key = get_memcache_key_for_room(request.host_url, room_id)
@@ -381,7 +410,7 @@ def add_client_to_room(request, room_id, client_id, is_loopback):
             room.add_client(client_id, Client(is_initiator))
             other_client.clear_messages()
 
-        #if memcache_client.cas(key, room, constants.ROOM_MEMCACHE_EXPIRATION_SEC):
+        # if memcache_client.cas(key, room, constants.ROOM_MEMCACHE_EXPIRATION_SEC):
         if 1:
             logging.info('Added client %s in room %s, retries = %d' \
                          % (client_id, room_id, retries))
@@ -397,6 +426,7 @@ def add_client_to_room(request, room_id, client_id, is_loopback):
             retries += 1
     return {'error': error, 'is_initiator': is_initiator,
             'messages': messages, 'room_state': str(room)}
+
 
 class JoinPage(webapp2.RequestHandler):
     def write_response(self, result, params, messages):
@@ -426,7 +456,6 @@ class JoinPage(webapp2.RequestHandler):
             room_id, client_id, result['messages'], result['is_initiator'])
         logging.info('User ' + client_id + ' joined room ' + room_id)
         logging.info('Room ' + room_id + ' has state ' + result['room_state'])
-
 
 
 def remove_client_from_room(host, room_id, client_id):
@@ -465,6 +494,8 @@ class LeavePage(webapp2.RequestHandler):
             self.request.host_url, room_id, client_id)
         if result['error'] is None:
             logging.info('Room ' + room_id + ' has state ' + result['room_state'])
+
+
 def checkIfRedirect(self):
     parsed_args = ''
     if self.request.headers['Host'] in constants.REDIRECT_DOMAINS:
@@ -477,6 +508,7 @@ def checkIfRedirect(self):
             parsed_args += argument + parameter
         redirect_url = constants.REDIRECT_URL + self.request.path + parsed_args
         webapp2.redirect(redirect_url, permanent=True, abort=True)
+
 
 class RoomPage(webapp2.RequestHandler):
     def write_response(self, target_page, params={}):
@@ -542,9 +574,10 @@ class MessagePage(webapp2.RequestHandler):
     def send_message_to_collider(self, room_id, client_id, message):
         logging.info('Forwarding message to collider for room ' + room_id +
                      ' client ' + client_id)
-        wss_url, wss_post_url = get_wss_parameters(self.request)
+        wss_instance_host = cache.get("wss_instance_host")
+        wss_url, wss_post_url = get_wss_parameters(self.request, wss_instance_host)
         url = wss_post_url + '/' + room_id + '/' + client_id
-        result = requests.post(url=url,payload=message)
+        result = requests.post(url=url, payload=message)
 
         if result.status_code != 200:
             logging.error(
@@ -571,11 +604,13 @@ class MessagePage(webapp2.RequestHandler):
         else:
             self.write_response(constants.RESPONSE_SUCCESS)
 
+
 class ParamsPage(webapp2.RequestHandler):
     def get(self):
         # Return room independent room parameters.
         params = get_room_parameters(self.request, None, None, None)
         self.response.write(json.dumps(params))
+
 
 app = webapp2.WSGIApplication([
     ('/', MainPage),
@@ -585,15 +620,15 @@ app = webapp2.WSGIApplication([
     ('/message/([a-zA-Z0-9-_]+)/([a-zA-Z0-9-_]+)', MessagePage),
     ('/params', ParamsPage),
     (r'/static/(.+)', webapp2_static.StaticFileHandler)
-], debug=True,config={
-    'webapp2_static.static_file_path': os.path.join(os.path.abspath(os.path.dirname(__file__)),"static")
+], debug=True, config={
+    'webapp2_static.static_file_path': os.path.join(os.path.abspath(os.path.dirname(__file__)), "static")
 })
+
 
 def main():
     port = int(os.environ.get('PORT', 5000))
     httpserver.serve(app, host='0.0.0.0', port=port)
 
+
 if __name__ == '__main__':
     main()
-
-
