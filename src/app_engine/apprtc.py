@@ -18,8 +18,13 @@ cache = FileCache('appname')
 jinja_environment = jinja2.Environment(
     loader=jinja2.FileSystemLoader(os.path.dirname(__file__)))
 
+class BaseRequestHandler(webapp2.RequestHandler):
+    def dispatch(self):
+        self.response.headers.add_header('Access-Control-Allow-Origin', '*')
+        self.response.headers.add_header('Access-Control-Allow-Headers', 'Content-Type')
+        webapp2.RequestHandler.dispatch(self)
 
-class StaticFileHandler(webapp2.RequestHandler):
+class StaticFileHandler(BaseRequestHandler):
     u"""Static file handler"""
 
     def __init__(self):
@@ -159,6 +164,8 @@ def make_media_stream_constraints(audio, video, firefox_fake_device):
 # Returns appropriate room parameters based on query parameters in the request.
 # TODO(tkchin): move query parameter parsing to JS code.
 def get_room_parameters(request, room_id, client_id, is_initiator):
+    if request.get("room_id"):
+        room_id = request.get("room_id")
     error_messages = []
     warning_messages = []
     # Get the base url without arguments.
@@ -297,8 +304,7 @@ def get_room_parameters(request, room_id, client_id, is_initiator):
     }
 
     if room_id is not None:
-        room_link = request.host_url + '/r/' + room_id
-        room_link = append_url_arguments(request, room_link)
+        room_link = '?room_id=' + room_id
         params['room_id'] = room_id
         params['room_link'] = room_link
     if client_id is not None:
@@ -308,7 +314,7 @@ def get_room_parameters(request, room_id, client_id, is_initiator):
     return params
 
 
-class MainPage(webapp2.RequestHandler):
+class MainPage(BaseRequestHandler):
     def write_response(self, target_page, params={}):
         template = jinja_environment.get_template(target_page)
         content = template.render(params)
@@ -317,6 +323,7 @@ class MainPage(webapp2.RequestHandler):
     def get(self):
         params = get_room_parameters(self.request, None, None, None)
         self.write_response('index_template.html', params)
+        
 
 
 def get_memcache_key_for_room(host, room_id):
@@ -428,7 +435,7 @@ def add_client_to_room(request, room_id, client_id, is_loopback):
             'messages': messages, 'room_state': str(room)}
 
 
-class JoinPage(webapp2.RequestHandler):
+class JoinPage(BaseRequestHandler):
     def write_response(self, result, params, messages):
         # TODO(tkchin): Clean up response format. For simplicity put everything in
         # params for now.
@@ -488,7 +495,7 @@ def remove_client_from_room(host, room_id, client_id):
         return {'error': None, 'room_state': str(room)}
 
 
-class LeavePage(webapp2.RequestHandler):
+class LeavePage(BaseRequestHandler):
     def post(self, room_id, client_id):
         result = remove_client_from_room(
             self.request.host_url, room_id, client_id)
@@ -510,7 +517,7 @@ def checkIfRedirect(self):
         webapp2.redirect(redirect_url, permanent=True, abort=True)
 
 
-class RoomPage(webapp2.RequestHandler):
+class RoomPage(BaseRequestHandler):
     def write_response(self, target_page, params={}):
         template = jinja_environment.get_template(target_page)
         content = template.render(params)
@@ -566,7 +573,7 @@ def save_message_from_client(host, room_id, client_id, message):
         return {'error': None, 'saved': True}
 
 
-class MessagePage(webapp2.RequestHandler):
+class MessagePage(BaseRequestHandler):
     def write_response(self, result):
         content = json.dumps({'result': result})
         self.response.write(content)
@@ -605,7 +612,7 @@ class MessagePage(webapp2.RequestHandler):
             self.write_response(constants.RESPONSE_SUCCESS)
 
 
-class ParamsPage(webapp2.RequestHandler):
+class ParamsPage(BaseRequestHandler):
     def get(self):
         # Return room independent room parameters.
         params = get_room_parameters(self.request, None, None, None)
@@ -614,11 +621,11 @@ class ParamsPage(webapp2.RequestHandler):
 
 app = webapp2.WSGIApplication([
     ('/', MainPage),
-    ('/join/([a-zA-Z0-9-_]+)', JoinPage),
-    ('/leave/([a-zA-Z0-9-_]+)/([a-zA-Z0-9-_]+)', LeavePage),
+    ('/api/rtc/room/join/([a-zA-Z0-9-_]+)', JoinPage),
+    ('/api/rtc/room/leave/([a-zA-Z0-9-_]+)/([a-zA-Z0-9-_]+)', LeavePage),
     ('/r/([a-zA-Z0-9-_]+)', RoomPage),
-    ('/message/([a-zA-Z0-9-_]+)/([a-zA-Z0-9-_]+)', MessagePage),
-    ('/params', ParamsPage),
+    ('/api/rtc/message/([a-zA-Z0-9-_]+)/([a-zA-Z0-9-_]+)', MessagePage),
+    ('/api/rtc/params', ParamsPage),
     (r'/static/(.+)', webapp2_static.StaticFileHandler)
 ], debug=True, config={
     'webapp2_static.static_file_path': os.path.join(os.path.abspath(os.path.dirname(__file__)), "static")
